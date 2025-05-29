@@ -66,9 +66,8 @@ def gerar_bpmn_xml(etapas):
             seq.append((tid_sim, f"EndEvent_{gateway_id}_1"))
             seq.append((tid_nao, f"EndEvent_{gateway_id}_2"))
 
-            xml += f'    <endEvent id="EndEvent_{gateway_id}_1" name="Fim"/>
-    <endEvent id="EndEvent_{gateway_id}_2" name="Fim"/>
-'
+            xml += f'    <endEvent id="EndEvent_{gateway_id}_1" name="Fim"/>\n'
+            xml += f'    <endEvent id="EndEvent_{gateway_id}_2" name="Fim"/>\n'
 
             next_from = None  # fim de ramificação
             task_id += 2
