@@ -13,6 +13,9 @@ def gerar_drawio_com_lanes(df):
     if "Responsável" not in df.columns:
         raise KeyError("Coluna 'Responsável' não encontrada. Verifique as tags no documento.")
 
+    if df["Responsável"].isnull().any() or (df["Responsável"] == "").any():
+        raise KeyError("Todas as etapas devem ter um responsável definido antes de gerar o fluxo.")
+
     root = ET.Element("mxGraphModel", attrib={"dx": "1000", "dy": "1000", "grid": "1", "gridSize": "10", "page": "1", "pageScale": "1", "pageWidth": "1400", "pageHeight": "1100"})
     root_elem = ET.SubElement(root, "root")
     ET.SubElement(root_elem, "mxCell", id="0")
@@ -26,18 +29,17 @@ def gerar_drawio_com_lanes(df):
     lane_width = 260
 
     for idx, resp in enumerate(df["Responsável"].unique()):
-        if not pd.isna(resp):
-            lane_id = f"lane_{idx}"
-            lanes[resp] = lane_x
-            y_positions[resp] = 40
-            lane = ET.SubElement(root_elem, "mxCell", id=lane_id, value=resp, style="swimlane;startSize=20;", vertex="1", parent="1")
-            geom = ET.SubElement(lane, "mxGeometry", x=str(lane_x), y="20", width=str(lane_width), height="900")
-            geom.set("as", "geometry")
-            lane_x += lane_width + 40
+        lane_id = f"lane_{idx}"
+        lanes[resp] = lane_x
+        y_positions[resp] = 40
+        lane = ET.SubElement(root_elem, "mxCell", id=lane_id, value=resp, style="swimlane;startSize=20;", vertex="1", parent="1")
+        geom = ET.SubElement(lane, "mxGeometry", x=str(lane_x), y="20", width=str(lane_width), height="900")
+        geom.set("as", "geometry")
+        lane_x += lane_width + 40
 
     for idx, row in df.iterrows():
         nome = row["Etapa"] or f"Etapa {idx+1}"
-        responsavel = row["Responsável"] or "Indefinido"
+        responsavel = row["Responsável"]
         x = lanes.get(responsavel, 100) + 30
         y = y_positions.get(responsavel, 40)
 
@@ -90,6 +92,11 @@ if arquivo:
     doc = Document(arquivo)
     linhas = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
     df = pd.DataFrame({"Etapa": linhas, "Responsável": "", "Condição": "", "Sim": "", "Não": ""})
+
+    if st.button("✨ Preencher responsáveis automaticamente"):
+        df["Responsável"] = "Fiscal"
+        st.info("Responsáveis preenchidos como 'Fiscal' para todas as etapas.")
+
     st.success("✅ Documento carregado. Edite as colunas abaixo para gerar o fluxo.")
     st.subheader("📝 Etapas extraídas do POP")
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
