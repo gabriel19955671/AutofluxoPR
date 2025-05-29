@@ -2,6 +2,7 @@ import streamlit as st
 from docx import Document
 from datetime import datetime
 import streamlit.components.v1 as components
+import html  # Novo para escapar XML
 
 # Função para extrair etapas e decisões do .docx
 def extrair_etapas_e_decisoes(docx_file):
@@ -107,6 +108,7 @@ if uploaded_file:
         st.download_button("📥 Baixar BPMN", xml_bpmn, file_name=filename, mime="application/xml")
 
         st.subheader("📊 Visualização do Fluxograma")
+        bpmn_escaped = html.escape(xml_bpmn).replace("\n", "").replace("'", "\\'")
         bpmn_html = f"""
         <!DOCTYPE html>
         <html>
@@ -118,9 +120,9 @@ if uploaded_file:
             </style>
           </head>
           <body>
-            <div id="canvas"></div>
+            <div id='canvas'></div>
             <script>
-              const bpmnXML = `{xml_bpmn.replace('`', '\\`').replace('"', '\\"').replace('\n', '')}`;
+              const bpmnXML = `{bpmn_escaped}`;
               const viewer = new BpmnJS({{ container: '#canvas' }});
               viewer.importXML(bpmnXML).then(() => {{
                 viewer.get('canvas').zoom('fit-viewport');
