@@ -1,6 +1,7 @@
 import streamlit as st
 from docx import Document
 from datetime import datetime
+import streamlit.components.v1 as components
 
 # Função para extrair etapas e decisões do .docx
 def extrair_etapas_e_decisoes(docx_file):
@@ -105,4 +106,29 @@ if uploaded_file:
         filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.bpmn"
         st.download_button("📥 Baixar BPMN", xml_bpmn, file_name=filename, mime="application/xml")
 
-        st.markdown("[Abrir no bpmn.io](https://bpmn.io/toolkit/bpmn-js/demo/modeler.html)", unsafe_allow_html=True)
+        st.subheader("📊 Visualização do Fluxograma")
+        bpmn_html = f"""
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <script src='https://unpkg.com/bpmn-js@11.5.0/dist/bpmn-viewer.development.js'></script>
+            <style>
+              html, body, #canvas {{ height: 100%; margin: 0; padding: 0; }}
+              #canvas {{ height: 500px; border: 1px solid #ccc; }}
+            </style>
+          </head>
+          <body>
+            <div id="canvas"></div>
+            <script>
+              const bpmnXML = `{xml_bpmn.replace('`', '\\`').replace('"', '\\"').replace('\n', '')}`;
+              const viewer = new BpmnJS({{ container: '#canvas' }});
+              viewer.importXML(bpmnXML).then(() => {{
+                viewer.get('canvas').zoom('fit-viewport');
+              }}).catch(err => {{
+                document.body.innerText = 'Erro ao carregar BPMN: ' + err;
+              }});
+            </script>
+          </body>
+        </html>
+        """
+        components.html(bpmn_html, height=550, scrolling=True)
