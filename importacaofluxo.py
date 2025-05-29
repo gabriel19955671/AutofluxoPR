@@ -8,6 +8,7 @@ import tempfile
 import os
 
 # Função para extrair estrutura do documento
+
 def extrair_pop_struct(docx_file):
     doc = Document(docx_file)
     etapas = []
@@ -102,15 +103,33 @@ def salvar_xml_como_png(xml_str):
 st.set_page_config(page_title="Editor POP para Fluxograma", layout="centered")
 st.title("🧭 POP para Fluxo Interativo")
 
-uploaded_file = st.file_uploader("📄 Envie o arquivo de Procedimento Operacional (.docx):", type="docx")
+opcao = st.radio("Escolha como deseja montar o fluxo:", ["📄 Enviar POP .docx", "⌨️ Escrever POP manualmente"])
 
-if uploaded_file:
-    dados = extrair_pop_struct(uploaded_file)
-    if not dados:
-        st.warning("⚠️ Nenhuma etapa foi extraída do documento. Verifique se o POP está formatado corretamente com as tags [ETAPA], [RESPONSÁVEL], etc.")
-        st.stop()
+if opcao == "📄 Enviar POP .docx":
+    uploaded_file = st.file_uploader("📎 Envie o arquivo de Procedimento Operacional (.docx):", type="docx")
+    if uploaded_file:
+        dados = extrair_pop_struct(uploaded_file)
+        if not dados:
+            st.warning("⚠️ Nenhuma etapa foi extraída do documento. Verifique se o POP está formatado corretamente com as tags [ETAPA], [RESPONSÁVEL], etc.")
+            st.stop()
+        df = pd.DataFrame(dados)
+else:
+    conteudo = st.text_area("✍️ Escreva o POP com as tags [ETAPA], [RESPONSÁVEL], [SE], [SIM], [NÃO] em cada linha:", height=300)
+    if conteudo:
+        linhas = conteudo.strip().split("\n")
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+            doc = Document()
+            for linha in linhas:
+                doc.add_paragraph(linha)
+            doc.save(tmp.name)
+            dados = extrair_pop_struct(tmp.name)
+            os.unlink(tmp.name)
+        if not dados:
+            st.warning("⚠️ Nenhuma etapa válida identificada. Verifique o formato do texto.")
+            st.stop()
+        df = pd.DataFrame(dados)
 
-    df = pd.DataFrame(dados)
+if 'df' in locals():
     st.subheader("📝 Etapas extraídas do POP")
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
@@ -119,7 +138,6 @@ if uploaded_file:
             xml = gerar_drawio_com_lanes(edited_df)
             filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
             st.download_button("⬇ Baixar XML Draw.io", xml, file_name=filename, mime="application/xml")
-
             drawio_link = gerar_link_imagem(xml)
             st.markdown(f"[🔍 Visualizar diretamente no Draw.io]({drawio_link})")
             st.success("✅ Arquivo gerado e pronto para visualizar!")
