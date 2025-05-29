@@ -34,6 +34,10 @@ def extrair_pop_struct(docx_file):
 
 # Gera um XML draw.io com conexões lógicas baseadas nas condições e separação por responsável
 def gerar_drawio_com_lanes(df):
+    df.columns = [col.strip() for col in df.columns]
+    if "Responsável" not in df.columns:
+        raise KeyError("Coluna 'Responsável' não encontrada. Verifique as tags no documento.")
+
     root = ET.Element("mxGraphModel", attrib={"dx": "1000", "dy": "1000", "grid": "1", "gridSize": "10", "page": "1", "pageScale": "1", "pageWidth": "850", "pageHeight": "1100"})
     root_elem = ET.SubElement(root, "root")
     ET.SubElement(root_elem, "mxCell", id="0")
@@ -102,16 +106,22 @@ uploaded_file = st.file_uploader("📄 Envie o arquivo de Procedimento Operacion
 
 if uploaded_file:
     dados = extrair_pop_struct(uploaded_file)
-    df = pd.DataFrame(dados)
+    if not dados:
+        st.warning("⚠️ Nenhuma etapa foi extraída do documento. Verifique se o POP está formatado corretamente com as tags [ETAPA], [RESPONSÁVEL], etc.")
+        st.stop()
 
+    df = pd.DataFrame(dados)
     st.subheader("📝 Etapas extraídas do POP")
     edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
 
     if st.button("📥 Gerar Fluxograma (Draw.io)"):
-        xml = gerar_drawio_com_lanes(edited_df)
-        filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
-        st.download_button("⬇ Baixar XML Draw.io", xml, file_name=filename, mime="application/xml")
+        try:
+            xml = gerar_drawio_com_lanes(edited_df)
+            filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
+            st.download_button("⬇ Baixar XML Draw.io", xml, file_name=filename, mime="application/xml")
 
-        drawio_link = gerar_link_imagem(xml)
-        st.markdown(f"[🔍 Visualizar diretamente no Draw.io]({drawio_link})")
-        st.success("✅ Arquivo gerado e pronto para visualizar!")
+            drawio_link = gerar_link_imagem(xml)
+            st.markdown(f"[🔍 Visualizar diretamente no Draw.io]({drawio_link})")
+            st.success("✅ Arquivo gerado e pronto para visualizar!")
+        except KeyError as e:
+            st.error(f"❌ Erro: {str(e)}")
