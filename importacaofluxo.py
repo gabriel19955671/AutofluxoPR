@@ -115,8 +115,8 @@ if uploaded_file:
           <head>
             <script src='https://unpkg.com/bpmn-js@11.5.0/dist/bpmn-viewer.development.js'></script>
             <style>
-              html, body, #canvas {{ height: 100%; margin: 0; padding: 0; }}
-              #canvas {{ height: 500px; border: 1px solid #ccc; }}
+              html, body {{ margin: 0; padding: 0; height: 100%; }}
+              #canvas {{ height: 600px; border: 1px solid #ccc; background-color: #f8f9fa; }}
             </style>
           </head>
           <body>
@@ -133,4 +133,9 @@ if uploaded_file:
           </body>
         </html>
         """
-        components.html(bpmn_html, height=550, scrolling=True)
+        components.html(bpmn_html, height=650, scrolling=True)
+
+        st.markdown("""
+        🔗 Caso prefira, abra manualmente o arquivo BPMN em:
+        [https://bpmn.io/toolkit/bpmn-js/demo/modeler.html](https://bpmn.io/toolkit/bpmn-js/demo/modeler.html)
+        """)
