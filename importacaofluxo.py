@@ -27,7 +27,7 @@ def extrair_etapas_e_decisoes(docx_file):
             condicional = None
     return etapas
 
-# Função para gerar BPMN XML com bloco DI (Diagram Interchange)
+# Função para gerar BPMN XML com diagrama em layout organizado
 def gerar_bpmn_xml(etapas):
     xml_header = '''<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -42,59 +42,57 @@ def gerar_bpmn_xml(etapas):
 
     xml_elements = []
     xml_flows = []
-    xml_diagram = []
+    node_pos = {"StartEvent_1": (300, 50)}
+    pos_y = 150
+    pos_x = 300
     task_id = 1
     gateway_id = 1
     next_from = "StartEvent_1"
-    pos_y = 100
-    node_pos = {"StartEvent_1": (100, pos_y)}
 
     for item in etapas:
         if item["tipo"] == "etapa":
             tid = f"Task_{task_id}"
             xml_elements.append(f'    <task id="{tid}" name="{item["nome"]}" />')
             xml_flows.append((next_from, tid))
-            node_pos[tid] = (100 + 150 * task_id, pos_y)
             next_from = tid
+            node_pos[tid] = (pos_x, pos_y)
+            pos_y += 100
             task_id += 1
 
         elif item["tipo"] == "gateway":
             gid = f"Gateway_{gateway_id}"
-            tid_sim = f"Task_{task_id}"
-            tid_nao = f"Task_{task_id+1}"
-            end_sim = f"EndEvent_{gateway_id}_1"
-            end_nao = f"EndEvent_{gateway_id}_2"
+            tsim = f"Task_{task_id}"
+            tnao = f"Task_{task_id+1}"
+            join = f"Join_{gateway_id}"
 
             xml_elements.append(f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />')
-            xml_elements.append(f'    <task id="{tid_sim}" name="{item["sim"]}" />')
-            xml_elements.append(f'    <task id="{tid_nao}" name="{item["nao"]}" />')
-            xml_elements.append(f'    <endEvent id="{end_sim}" name="Fim"/>')
-            xml_elements.append(f'    <endEvent id="{end_nao}" name="Fim"/>')
+            xml_elements.append(f'    <task id="{tsim}" name="{item["sim"]}" />')
+            xml_elements.append(f'    <task id="{tnao}" name="{item["nao"]}" />')
+            xml_elements.append(f'    <exclusiveGateway id="{join}" name="Unir caminhos" />')
 
             xml_flows.append((next_from, gid))
-            xml_flows.append((gid, tid_sim, "sim"))
-            xml_flows.append((gid, tid_nao, "não"))
-            xml_flows.append((tid_sim, end_sim))
-            xml_flows.append((tid_nao, end_nao))
+            xml_flows.append((gid, tsim, "sim"))
+            xml_flows.append((gid, tnao, "não"))
+            xml_flows.append((tsim, join))
+            xml_flows.append((tnao, join))
 
-            node_pos[gid] = (100 + 150 * task_id, pos_y)
-            node_pos[tid_sim] = (100 + 150 * (task_id + 1), pos_y - 50)
-            node_pos[tid_nao] = (100 + 150 * (task_id + 1), pos_y + 50)
-            node_pos[end_sim] = (100 + 150 * (task_id + 2), pos_y - 50)
-            node_pos[end_nao] = (100 + 150 * (task_id + 2), pos_y + 50)
+            node_pos[gid] = (pos_x, pos_y)
+            node_pos[tsim] = (pos_x - 150, pos_y + 100)
+            node_pos[tnao] = (pos_x + 150, pos_y + 100)
+            node_pos[join] = (pos_x, pos_y + 200)
 
-            next_from = None
+            next_from = join
+            pos_y += 300
             task_id += 2
             gateway_id += 1
 
-    if next_from not in [None, "None"]:
-        eid = "EndEvent_final"
-        xml_elements.append(f'    <endEvent id="{eid}" name="Fim"/>')
+    eid = "EndEvent_1"
+    xml_elements.append(f'    <endEvent id="{eid}" name="Fim"/>')
+    if next_from:
         xml_flows.append((next_from, eid))
-        node_pos[eid] = (100 + 150 * task_id, pos_y)
+    node_pos[eid] = (pos_x, pos_y)
 
     xml_body = "\n".join(xml_elements)
-
     flow_xml = ""
     for i, item in enumerate(xml_flows):
         fid = f"Flow_{i+1}"
@@ -107,25 +105,22 @@ def gerar_bpmn_xml(etapas):
       <conditionExpression xsi:type="tFormalExpression"><![CDATA[{cond}]]></conditionExpression>
     </sequenceFlow>\n'''
 
-    xml_end = "  </process>\n"
-
-    xml_end += "  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"ProcessoImportadoDocx\">\n"
-    for elem_id, (x, y) in node_pos.items():
+    xml_di = "  </process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"ProcessoImportadoDocx\">\n"
+    for eid, (x, y) in node_pos.items():
         shape = "task"
-        if "StartEvent" in elem_id:
+        if "StartEvent" in eid:
             shape = "startEvent"
-        elif "EndEvent" in elem_id:
+        elif "EndEvent" in eid:
             shape = "endEvent"
-        elif "Gateway" in elem_id:
+        elif "Gateway" in eid or "Join" in eid:
             shape = "exclusiveGateway"
 
-        xml_end += f'''      <bpmndi:BPMNShape id="{elem_id}_di" bpmnElement="{elem_id}">
+        xml_di += f'''      <bpmndi:BPMNShape id="{eid}_di" bpmnElement="{eid}">
         <omgdc:Bounds x="{x}" y="{y}" width="100" height="80" />
       </bpmndi:BPMNShape>\n'''
+    xml_di += "    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>"
 
-    xml_end += "    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>"
-
-    return xml_header + xml_body + "\n" + flow_xml + xml_end
+    return xml_header + xml_body + "\n" + flow_xml + xml_di
 
 # Streamlit App
 st.set_page_config(page_title="POP para BPMN", layout="centered")
