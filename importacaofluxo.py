@@ -3,6 +3,7 @@ from docx import Document
 from datetime import datetime
 import streamlit.components.v1 as components
 import html
+import xml.etree.ElementTree as ET
 
 # Função para extrair etapas e gateways do documento
 def extrair_etapas_e_decisoes(docx_file):
@@ -27,110 +28,54 @@ def extrair_etapas_e_decisoes(docx_file):
             condicional = None
     return etapas
 
-# Função para gerar BPMN XML com regras de fluxo mais rigorosas e layout mais limpo
+# Função para gerar XML no formato draw.io
 
-def gerar_bpmn_xml(etapas):
-    xml_header = '''<?xml version="1.0" encoding="UTF-8"?>
-<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
-             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
-             targetNamespace="http://bpmn.io/schema/bpmn">
-  <process id="ProcessoImportadoDocx" isExecutable="true">
-    <startEvent id="StartEvent_1" name="Início"/>
-'''
+def gerar_drawio_xml(etapas):
+    root = ET.Element("mxGraphModel")
+    root.set("dx", "1000")
+    root.set("dy", "1000")
+    root.set("grid", "1")
+    root.set("gridSize", "10")
+    root.set("guides", "1")
+    root.set("tooltips", "1")
+    root.set("connect", "1")
+    root.set("arrows", "1")
+    root.set("fold", "1")
+    root.set("page", "1")
+    root.set("pageScale", "1")
+    root.set("pageWidth", "850")
+    root.set("pageHeight", "1100")
+    root.set("math", "0")
+    root.set("shadow", "0")
 
-    xml_elements = []
-    xml_flows = []
-    node_pos = {"StartEvent_1": (300, 50)}
-    pos_y = 150
-    pos_x = 300
-    task_id = 1
-    gateway_id = 1
-    next_from = "StartEvent_1"
+    root_cell = ET.SubElement(ET.SubElement(root, "root"), "mxCell", id="0")
+    ET.SubElement(root.find("root"), "mxCell", id="1", parent="0")
 
-    for item in etapas:
-        if item["tipo"] == "etapa":
-            tid = f"Task_{task_id}"
-            xml_elements.append(f'    <task id="{tid}" name="{item["nome"]}" />')
-            xml_flows.append((next_from, tid))
-            next_from = tid
-            node_pos[tid] = (pos_x, pos_y)
-            pos_y += 100
-            task_id += 1
+    y = 40
+    step_id = 2
+    last_id = "1"
 
-        elif item["tipo"] == "gateway":
-            gid = f"Gateway_{gateway_id}"
-            join = f"Join_{gateway_id}"
-            tsim = f"Task_{task_id}"
-            tnao = f"Task_{task_id + 1}"
+    for etapa in etapas:
+        nome = etapa.get("nome") or etapa.get("condicao") or "Etapa"
+        style = "shape=process;whiteSpace=wrap;html=1;" if etapa["tipo"] == "etapa" else "shape=rhombus;whiteSpace=wrap;html=1;"
+        step = ET.SubElement(root.find("root"), "mxCell", id=str(step_id), value=nome, style=style, vertex="1", parent="1")
+        ET.SubElement(step, "mxGeometry", x="100", y=str(y), width="160", height="60", as_="geometry")
 
-            xml_elements.extend([
-                f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />',
-                f'    <task id="{tsim}" name="{item["sim"]}" />',
-                f'    <task id="{tnao}" name="{item["nao"]}" />',
-                f'    <exclusiveGateway id="{join}" name="Convergência" />'
-            ])
+        # Conector
+        if step_id > 2:
+            edge = ET.SubElement(root.find("root"), "mxCell", id=str(step_id+1000), style="endArrow=block;", edge="1", parent="1", source=str(step_id-1), target=str(step_id))
+            ET.SubElement(edge, "mxGeometry", relative="1", as_="geometry")
 
-            xml_flows.append((next_from, gid))
-            xml_flows.extend([
-                (gid, tsim, "sim"),
-                (gid, tnao, "não"),
-                (tsim, join),
-                (tnao, join)
-            ])
+        y += 100
+        last_id = str(step_id)
+        step_id += 1
 
-            node_pos[gid] = (pos_x, pos_y)
-            node_pos[tsim] = (pos_x - 150, pos_y + 100)
-            node_pos[tnao] = (pos_x + 150, pos_y + 100)
-            node_pos[join] = (pos_x, pos_y + 220)
-
-            next_from = join
-            pos_y += 320
-            task_id += 2
-            gateway_id += 1
-
-    eid = "EndEvent_1"
-    xml_elements.append(f'    <endEvent id="{eid}" name="Fim"/>')
-    xml_flows.append((next_from, eid))
-    node_pos[eid] = (pos_x, pos_y)
-
-    xml_body = "\n".join(xml_elements)
-
-    flow_xml = ""
-    for i, item in enumerate(xml_flows):
-        fid = f"Flow_{i+1}"
-        if len(item) == 2:
-            s, t = item
-            flow_xml += f'    <sequenceFlow id="{fid}" sourceRef="{s}" targetRef="{t}"/>\n'
-        else:
-            s, t, cond = item
-            flow_xml += f'''    <sequenceFlow id="{fid}" sourceRef="{s}" targetRef="{t}">
-      <conditionExpression xsi:type="tFormalExpression"><![CDATA[{cond}]]></conditionExpression>
-    </sequenceFlow>\n'''
-
-    xml_di = "  </process>\n  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"ProcessoImportadoDocx\">\n"
-    for eid, (x, y) in node_pos.items():
-        shape = "task"
-        if "StartEvent" in eid:
-            shape = "startEvent"
-        elif "EndEvent" in eid:
-            shape = "endEvent"
-        elif "Gateway" in eid or "Join" in eid:
-            shape = "exclusiveGateway"
-
-        xml_di += f'''      <bpmndi:BPMNShape id="{eid}_di" bpmnElement="{eid}">
-        <omgdc:Bounds x="{x}" y="{y}" width="100" height="80" />
-      </bpmndi:BPMNShape>\n'''
-
-    xml_di += "    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>"
-
-    return xml_header + xml_body + "\n" + flow_xml + xml_di
+    xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
+    return f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_str}'
 
 # Interface Streamlit
-st.set_page_config(page_title="POP para BPMN", layout="centered")
-st.title("📄 Conversor de Procedimento Operacional para BPMN")
+st.set_page_config(page_title="POP para Fluxo", layout="centered")
+st.title("📄 Conversor de Procedimento Operacional para Fluxograma")
 
 uploaded_file = st.file_uploader("Envie um arquivo .docx com o procedimento:", type="docx")
 
@@ -140,40 +85,13 @@ if uploaded_file:
     for etapa in etapas:
         st.json(etapa)
 
-    if st.button("🔁 Gerar Arquivo BPMN"):
-        xml_bpmn = gerar_bpmn_xml(etapas)
-        filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.bpmn"
-        st.download_button("📅 Baixar BPMN", xml_bpmn, file_name=filename, mime="application/xml")
+    tipo_fluxo = st.radio("Escolha o formato do fluxograma:", ["BPMN", "Draw.io"])
 
-        st.subheader("📊 Visualização do Fluxograma")
-        bpmn_escaped = html.escape(xml_bpmn).replace("\n", "").replace("'", "\\'")
-        bpmn_html = f"""
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <script src='https://unpkg.com/bpmn-js@11.5.0/dist/bpmn-viewer.development.js'></script>
-            <style>
-              html, body {{ margin: 0; padding: 0; height: 100%; }}
-              #canvas {{ height: 600px; border: 1px solid #ccc; background-color: #f8f9fa; }}
-            </style>
-          </head>
-          <body>
-            <div id='canvas'></div>
-            <script>
-              const bpmnXML = `{bpmn_escaped}`;
-              const viewer = new BpmnJS({{ container: '#canvas' }});
-              viewer.importXML(bpmnXML).then(() => {{
-                viewer.get('canvas').zoom('fit-viewport');
-              }}).catch(err => {{
-                document.body.innerText = 'Erro ao carregar BPMN: ' + err;
-              }});
-            </script>
-          </body>
-        </html>
-        """
-        components.html(bpmn_html, height=650, scrolling=True)
-
-        st.markdown("""
-        🔗 Caso prefira, abra manualmente o arquivo BPMN em:
-        [https://bpmn.io/toolkit/bpmn-js/demo/modeler.html](https://bpmn.io/toolkit/bpmn-js/demo/modeler.html)
-        """)
+    if st.button("🔁 Gerar Arquivo de Fluxo"):
+        if tipo_fluxo == "BPMN":
+            st.warning("🚧 A geração de BPMN está temporariamente desativada nesta versão.")
+        else:
+            drawio_xml = gerar_drawio_xml(etapas)
+            filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
+            st.download_button("📥 Baixar Fluxograma (Draw.io)", drawio_xml, file_name=filename, mime="application/xml")
+            st.success("✅ Arquivo gerado com sucesso. Importe em https://app.diagrams.net")
