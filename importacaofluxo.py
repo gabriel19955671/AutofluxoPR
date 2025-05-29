@@ -38,17 +38,18 @@ def gerar_bpmn_xml(etapas):
     <startEvent id="StartEvent_1" name="Início"/>
 '''
     seq = []
-    ultimo = "StartEvent_1"
     task_id = 1
     gateway_id = 1
+    next_from = "StartEvent_1"
 
     for item in etapas:
         if item["tipo"] == "etapa":
             tid = f"Task_{task_id}"
             xml += f'    <task id="{tid}" name="{item["nome"]}" />\n'
-            seq.append((ultimo, tid))
-            ultimo = tid
+            seq.append((next_from, tid))
+            next_from = tid
             task_id += 1
+
         elif item["tipo"] == "gateway":
             gid = f"Gateway_{gateway_id}"
             tid_sim = f"Task_{task_id}"
@@ -58,23 +59,26 @@ def gerar_bpmn_xml(etapas):
             xml += f'    <task id="{tid_sim}" name="{item["sim"]}" />\n'
             xml += f'    <task id="{tid_nao}" name="{item["nao"]}" />\n'
 
-            seq.append((ultimo, gid))
+            seq.append((next_from, gid))
             seq.append((gid, tid_sim, "sim"))
             seq.append((gid, tid_nao, "não"))
 
-            ultimo = [tid_sim, tid_nao]
+            seq.append((tid_sim, f"EndEvent_{gateway_id}_1"))
+            seq.append((tid_nao, f"EndEvent_{gateway_id}_2"))
+
+            xml += f'    <endEvent id="EndEvent_{gateway_id}_1" name="Fim"/>
+    <endEvent id="EndEvent_{gateway_id}_2" name="Fim"/>
+'
+
+            next_from = None  # fim de ramificação
             task_id += 2
             gateway_id += 1
 
-    xml += f'    <endEvent id="EndEvent_1" name="Fim"/>\n'
+    if next_from:
+        xml += f'    <endEvent id="EndEvent_final" name="Fim"/>\n'
+        seq.append((next_from, "EndEvent_final"))
 
     flow_count = 1
-    if isinstance(ultimo, list):
-        for u in ultimo:
-            seq.append((u, "EndEvent_1"))
-    else:
-        seq.append((ultimo, "EndEvent_1"))
-
     for item in seq:
         if len(item) == 2:
             source, target = item
@@ -105,7 +109,7 @@ if uploaded_file:
     if st.button("🔁 Gerar Arquivo BPMN"):
         xml_bpmn = gerar_bpmn_xml(etapas)
         filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.bpmn"
-        st.download_button("📥 Baixar BPMN", xml_bpmn, file_name=filename, mime="application/xml")
+        st.download_button("📅 Baixar BPMN", xml_bpmn, file_name=filename, mime="application/xml")
 
         st.subheader("📊 Visualização do Fluxograma")
         bpmn_escaped = html.escape(xml_bpmn).replace("\n", "").replace("'", "\\'")
