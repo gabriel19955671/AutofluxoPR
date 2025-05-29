@@ -25,7 +25,7 @@ def extrair_pop_struct_de_texto(texto):
             etapa_atual["Condição"] = linha.replace("[SE]", "").strip()
         elif linha.startswith("[SIM]"):
             etapa_atual["Sim"] = linha.replace("[SIM]", "").strip()
-        elif linha.startswith("[NÃO]") or linha.startswith("[NÃO]"):
+        elif linha.startswith("[NÃO]"):
             etapa_atual["Não"] = linha.replace("[NÃO]", "").strip()
     if etapa_atual:
         etapas.append(etapa_atual)
