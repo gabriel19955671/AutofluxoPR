@@ -29,7 +29,6 @@ def extrair_etapas_e_decisoes(docx_file):
     return etapas
 
 # Função para gerar XML no formato draw.io
-
 def gerar_drawio_xml(etapas):
     root = ET.Element("mxGraphModel")
     root.set("dx", "1000")
@@ -48,26 +47,27 @@ def gerar_drawio_xml(etapas):
     root.set("math", "0")
     root.set("shadow", "0")
 
-    root_cell = ET.SubElement(ET.SubElement(root, "root"), "mxCell", id="0")
-    ET.SubElement(root.find("root"), "mxCell", id="1", parent="0")
+    root_elem = ET.SubElement(root, "root")
+    ET.SubElement(root_elem, "mxCell", id="0")
+    ET.SubElement(root_elem, "mxCell", id="1", parent="0")
 
     y = 40
     step_id = 2
-    last_id = "1"
 
     for etapa in etapas:
         nome = etapa.get("nome") or etapa.get("condicao") or "Etapa"
         style = "shape=process;whiteSpace=wrap;html=1;" if etapa["tipo"] == "etapa" else "shape=rhombus;whiteSpace=wrap;html=1;"
-        step = ET.SubElement(root.find("root"), "mxCell", id=str(step_id), value=nome, style=style, vertex="1", parent="1")
-        ET.SubElement(step, "mxGeometry", x="100", y=str(y), width="160", height="60", as_="geometry")
+        step = ET.SubElement(root_elem, "mxCell", id=str(step_id), value=nome, style=style, vertex="1", parent="1")
+        geometry = ET.SubElement(step, "mxGeometry", x="100", y=str(y), width="160", height="60")
+        geometry.set("as", "geometry")
 
         # Conector
         if step_id > 2:
-            edge = ET.SubElement(root.find("root"), "mxCell", id=str(step_id+1000), style="endArrow=block;", edge="1", parent="1", source=str(step_id-1), target=str(step_id))
-            ET.SubElement(edge, "mxGeometry", relative="1", as_="geometry")
+            edge = ET.SubElement(root_elem, "mxCell", id=str(step_id+1000), style="endArrow=block;", edge="1", parent="1", source=str(step_id-1), target=str(step_id))
+            edge_geom = ET.SubElement(edge, "mxGeometry", relative="1")
+            edge_geom.set("as", "geometry")
 
         y += 100
-        last_id = str(step_id)
         step_id += 1
 
     xml_str = ET.tostring(root, encoding="utf-8", method="xml").decode("utf-8")
