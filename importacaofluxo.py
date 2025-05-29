@@ -107,7 +107,15 @@ def gerar_link_imagem(xml_str):
 st.set_page_config(page_title="Editor POP para Fluxograma", layout="centered")
 st.title("🧭 POP para Fluxo Interativo")
 
-conteudo = st.text_area("✍️ Escreva o POP com as tags [ETAPA], [RESPONSÁVEL], [SE], [SIM], [NÃO] em cada linha:", height=300)
+arquivo = st.file_uploader("📤 Faça upload do POP (.docx)", type=["docx"])
+conteudo = ""
+
+if arquivo:
+    doc = Document(arquivo)
+    conteudo = "\n".join([p.text for p in doc.paragraphs])
+    st.text_area("📄 Conteúdo extraído do documento:", value=conteudo, height=300)
+else:
+    conteudo = st.text_area("✍️ Ou escreva o POP com as tags [ETAPA], [RESPONSÁVEL], [SE], [SIM], [NÃO] em cada linha:", height=300)
 
 if conteudo:
     dados = extrair_pop_struct_de_texto(conteudo)
