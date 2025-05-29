@@ -73,7 +73,7 @@ def gerar_bpmn_xml(etapas):
             task_id += 2
             gateway_id += 1
 
-    if next_from:
+    if next_from not in [None, "None"]:
         xml += f'    <endEvent id="EndEvent_final" name="Fim"/>\n'
         seq.append((next_from, "EndEvent_final"))
 
