@@ -2,7 +2,7 @@ import streamlit as st
 from docx import Document
 from datetime import datetime
 import streamlit.components.v1 as components
-import html  # Novo para escapar XML
+import html
 
 # Função para extrair etapas e decisões do .docx
 def extrair_etapas_e_decisoes(docx_file):
@@ -27,26 +27,34 @@ def extrair_etapas_e_decisoes(docx_file):
             condicional = None
     return etapas
 
-# Função para gerar BPMN XML
+# Função para gerar BPMN XML com bloco DI (Diagram Interchange)
 def gerar_bpmn_xml(etapas):
-    xml = '''<?xml version="1.0" encoding="UTF-8"?>
+    xml_header = '''<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-             id="Definitions_1"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
              targetNamespace="http://bpmn.io/schema/bpmn">
   <process id="ProcessoImportadoDocx" isExecutable="true">
     <startEvent id="StartEvent_1" name="Início"/>
 '''
-    seq = []
+
+    xml_elements = []
+    xml_flows = []
+    xml_diagram = []
     task_id = 1
     gateway_id = 1
     next_from = "StartEvent_1"
+    pos_y = 100
+    node_pos = {"StartEvent_1": (100, pos_y)}
 
     for item in etapas:
         if item["tipo"] == "etapa":
             tid = f"Task_{task_id}"
-            xml += f'    <task id="{tid}" name="{item["nome"]}" />\n'
-            seq.append((next_from, tid))
+            xml_elements.append(f'    <task id="{tid}" name="{item["nome"]}" />')
+            xml_flows.append((next_from, tid))
+            node_pos[tid] = (100 + 150 * task_id, pos_y)
             next_from = tid
             task_id += 1
 
@@ -54,43 +62,70 @@ def gerar_bpmn_xml(etapas):
             gid = f"Gateway_{gateway_id}"
             tid_sim = f"Task_{task_id}"
             tid_nao = f"Task_{task_id+1}"
+            end_sim = f"EndEvent_{gateway_id}_1"
+            end_nao = f"EndEvent_{gateway_id}_2"
 
-            xml += f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />\n'
-            xml += f'    <task id="{tid_sim}" name="{item["sim"]}" />\n'
-            xml += f'    <task id="{tid_nao}" name="{item["nao"]}" />\n'
+            xml_elements.append(f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />')
+            xml_elements.append(f'    <task id="{tid_sim}" name="{item["sim"]}" />')
+            xml_elements.append(f'    <task id="{tid_nao}" name="{item["nao"]}" />')
+            xml_elements.append(f'    <endEvent id="{end_sim}" name="Fim"/>')
+            xml_elements.append(f'    <endEvent id="{end_nao}" name="Fim"/>')
 
-            seq.append((next_from, gid))
-            seq.append((gid, tid_sim, "sim"))
-            seq.append((gid, tid_nao, "não"))
+            xml_flows.append((next_from, gid))
+            xml_flows.append((gid, tid_sim, "sim"))
+            xml_flows.append((gid, tid_nao, "não"))
+            xml_flows.append((tid_sim, end_sim))
+            xml_flows.append((tid_nao, end_nao))
 
-            seq.append((tid_sim, f"EndEvent_{gateway_id}_1"))
-            seq.append((tid_nao, f"EndEvent_{gateway_id}_2"))
+            node_pos[gid] = (100 + 150 * task_id, pos_y)
+            node_pos[tid_sim] = (100 + 150 * (task_id + 1), pos_y - 50)
+            node_pos[tid_nao] = (100 + 150 * (task_id + 1), pos_y + 50)
+            node_pos[end_sim] = (100 + 150 * (task_id + 2), pos_y - 50)
+            node_pos[end_nao] = (100 + 150 * (task_id + 2), pos_y + 50)
 
-            xml += f'    <endEvent id="EndEvent_{gateway_id}_1" name="Fim"/>\n'
-            xml += f'    <endEvent id="EndEvent_{gateway_id}_2" name="Fim"/>\n'
-
-            next_from = None  # fim de ramificação
+            next_from = None
             task_id += 2
             gateway_id += 1
 
     if next_from not in [None, "None"]:
-        xml += f'    <endEvent id="EndEvent_final" name="Fim"/>\n'
-        seq.append((next_from, "EndEvent_final"))
+        eid = "EndEvent_final"
+        xml_elements.append(f'    <endEvent id="{eid}" name="Fim"/>')
+        xml_flows.append((next_from, eid))
+        node_pos[eid] = (100 + 150 * task_id, pos_y)
 
-    flow_count = 1
-    for item in seq:
+    xml_body = "\n".join(xml_elements)
+
+    flow_xml = ""
+    for i, item in enumerate(xml_flows):
+        fid = f"Flow_{i+1}"
         if len(item) == 2:
-            source, target = item
-            xml += f'    <sequenceFlow id="Flow_{flow_count}" sourceRef="{source}" targetRef="{target}"/>\n'
+            s, t = item
+            flow_xml += f'    <sequenceFlow id="{fid}" sourceRef="{s}" targetRef="{t}"/>\n'
         else:
-            source, target, cond = item
-            xml += f'''    <sequenceFlow id="Flow_{flow_count}" sourceRef="{source}" targetRef="{target}">
+            s, t, cond = item
+            flow_xml += f'''    <sequenceFlow id="{fid}" sourceRef="{s}" targetRef="{t}">
       <conditionExpression xsi:type="tFormalExpression"><![CDATA[{cond}]]></conditionExpression>
     </sequenceFlow>\n'''
-        flow_count += 1
 
-    xml += '  </process>\n</definitions>'
-    return xml
+    xml_end = "  </process>\n"
+
+    xml_end += "  <bpmndi:BPMNDiagram id=\"BPMNDiagram_1\">\n    <bpmndi:BPMNPlane id=\"BPMNPlane_1\" bpmnElement=\"ProcessoImportadoDocx\">\n"
+    for elem_id, (x, y) in node_pos.items():
+        shape = "task"
+        if "StartEvent" in elem_id:
+            shape = "startEvent"
+        elif "EndEvent" in elem_id:
+            shape = "endEvent"
+        elif "Gateway" in elem_id:
+            shape = "exclusiveGateway"
+
+        xml_end += f'''      <bpmndi:BPMNShape id="{elem_id}_di" bpmnElement="{elem_id}">
+        <omgdc:Bounds x="{x}" y="{y}" width="100" height="80" />
+      </bpmndi:BPMNShape>\n'''
+
+    xml_end += "    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>"
+
+    return xml_header + xml_body + "\n" + flow_xml + xml_end
 
 # Streamlit App
 st.set_page_config(page_title="POP para BPMN", layout="centered")
