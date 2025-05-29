@@ -4,7 +4,7 @@ from datetime import datetime
 import streamlit.components.v1 as components
 import html
 
-# Função para extrair etapas e decisões do .docx
+# Função para extrair etapas e gateways do documento
 def extrair_etapas_e_decisoes(docx_file):
     doc = Document(docx_file)
     etapas = []
@@ -27,7 +27,8 @@ def extrair_etapas_e_decisoes(docx_file):
             condicional = None
     return etapas
 
-# Função para gerar BPMN XML com diagrama em layout organizado
+# Função para gerar BPMN XML com regras de fluxo mais rigorosas e layout mais limpo
+
 def gerar_bpmn_xml(etapas):
     xml_header = '''<?xml version="1.0" encoding="UTF-8"?>
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
@@ -61,38 +62,42 @@ def gerar_bpmn_xml(etapas):
 
         elif item["tipo"] == "gateway":
             gid = f"Gateway_{gateway_id}"
-            tsim = f"Task_{task_id}"
-            tnao = f"Task_{task_id+1}"
             join = f"Join_{gateway_id}"
+            tsim = f"Task_{task_id}"
+            tnao = f"Task_{task_id + 1}"
 
-            xml_elements.append(f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />')
-            xml_elements.append(f'    <task id="{tsim}" name="{item["sim"]}" />')
-            xml_elements.append(f'    <task id="{tnao}" name="{item["nao"]}" />')
-            xml_elements.append(f'    <exclusiveGateway id="{join}" name="Unir caminhos" />')
+            xml_elements.extend([
+                f'    <exclusiveGateway id="{gid}" name="{item["condicao"]}" />',
+                f'    <task id="{tsim}" name="{item["sim"]}" />',
+                f'    <task id="{tnao}" name="{item["nao"]}" />',
+                f'    <exclusiveGateway id="{join}" name="Convergência" />'
+            ])
 
             xml_flows.append((next_from, gid))
-            xml_flows.append((gid, tsim, "sim"))
-            xml_flows.append((gid, tnao, "não"))
-            xml_flows.append((tsim, join))
-            xml_flows.append((tnao, join))
+            xml_flows.extend([
+                (gid, tsim, "sim"),
+                (gid, tnao, "não"),
+                (tsim, join),
+                (tnao, join)
+            ])
 
             node_pos[gid] = (pos_x, pos_y)
             node_pos[tsim] = (pos_x - 150, pos_y + 100)
             node_pos[tnao] = (pos_x + 150, pos_y + 100)
-            node_pos[join] = (pos_x, pos_y + 200)
+            node_pos[join] = (pos_x, pos_y + 220)
 
             next_from = join
-            pos_y += 300
+            pos_y += 320
             task_id += 2
             gateway_id += 1
 
     eid = "EndEvent_1"
     xml_elements.append(f'    <endEvent id="{eid}" name="Fim"/>')
-    if next_from:
-        xml_flows.append((next_from, eid))
+    xml_flows.append((next_from, eid))
     node_pos[eid] = (pos_x, pos_y)
 
     xml_body = "\n".join(xml_elements)
+
     flow_xml = ""
     for i, item in enumerate(xml_flows):
         fid = f"Flow_{i+1}"
@@ -118,11 +123,12 @@ def gerar_bpmn_xml(etapas):
         xml_di += f'''      <bpmndi:BPMNShape id="{eid}_di" bpmnElement="{eid}">
         <omgdc:Bounds x="{x}" y="{y}" width="100" height="80" />
       </bpmndi:BPMNShape>\n'''
+
     xml_di += "    </bpmndi:BPMNPlane>\n  </bpmndi:BPMNDiagram>\n</definitions>"
 
     return xml_header + xml_body + "\n" + flow_xml + xml_di
 
-# Streamlit App
+# Interface Streamlit
 st.set_page_config(page_title="POP para BPMN", layout="centered")
 st.title("📄 Conversor de Procedimento Operacional para BPMN")
 
@@ -130,7 +136,6 @@ uploaded_file = st.file_uploader("Envie um arquivo .docx com o procedimento:", t
 
 if uploaded_file:
     etapas = extrair_etapas_e_decisoes(uploaded_file)
-
     st.subheader("🔍 Etapas e Decisões Extraídas")
     for etapa in etapas:
         st.json(etapa)
