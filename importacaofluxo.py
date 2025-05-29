@@ -7,30 +7,6 @@ import base64
 import tempfile
 import os
 
-# Função para extrair estrutura do documento ou texto manual
-def extrair_pop_struct_de_texto(texto):
-    etapas = []
-    etapa_atual = {}
-    for linha in texto.strip().split("\n"):
-        linha = linha.strip()
-        if not linha:
-            continue
-        if linha.startswith("[ETAPA]"):
-            if etapa_atual:
-                etapas.append(etapa_atual)
-            etapa_atual = {"Etapa": linha.replace("[ETAPA]", "").strip(), "Responsável": "", "Condição": "", "Sim": "", "Não": ""}
-        elif linha.startswith("[RESPONSÁVEL]"):
-            etapa_atual["Responsável"] = linha.replace("[RESPONSÁVEL]", "").strip()
-        elif linha.startswith("[SE]"):
-            etapa_atual["Condição"] = linha.replace("[SE]", "").strip()
-        elif linha.startswith("[SIM]"):
-            etapa_atual["Sim"] = linha.replace("[SIM]", "").strip()
-        elif linha.startswith("[NÃO]"):
-            etapa_atual["Não"] = linha.replace("[NÃO]", "").strip()
-    if etapa_atual:
-        etapas.append(etapa_atual)
-    return etapas
-
 # Gera um XML draw.io com notacao BPMN visual e lanes visuais agrupadas por responsável
 def gerar_drawio_com_lanes(df):
     df.columns = [col.strip() for col in df.columns]
@@ -112,27 +88,21 @@ conteudo = ""
 
 if arquivo:
     doc = Document(arquivo)
-    conteudo = "\n".join([p.text for p in doc.paragraphs])
-    st.text_area("📄 Conteúdo extraído do documento:", value=conteudo, height=300)
+    linhas = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+    df = pd.DataFrame({"Etapa": linhas, "Responsável": "", "Condição": "", "Sim": "", "Não": ""})
+    st.success("✅ Documento carregado. Edite as colunas abaixo para gerar o fluxo.")
+    st.subheader("📝 Etapas extraídas do POP")
+    edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
+
+    if st.button("📥 Gerar Fluxograma (Draw.io)"):
+        try:
+            xml = gerar_drawio_com_lanes(edited_df)
+            filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
+            st.download_button("⬇ Baixar XML Draw.io", xml, file_name=filename, mime="application/xml")
+            drawio_link = gerar_link_imagem(xml)
+            st.markdown(f"[🔍 Visualizar diretamente no Draw.io]({drawio_link})")
+            st.success("✅ Arquivo gerado e pronto para visualizar!")
+        except KeyError as e:
+            st.error(f"❌ Erro: {str(e)}")
 else:
-    conteudo = st.text_area("✍️ Ou escreva o POP com as tags [ETAPA], [RESPONSÁVEL], [SE], [SIM], [NÃO] em cada linha:", height=300)
-
-if conteudo:
-    dados = extrair_pop_struct_de_texto(conteudo)
-    if not dados:
-        st.warning("⚠️ Nenhuma etapa foi reconhecida. Verifique se há tags [ETAPA], [RESPONSÁVEL], etc.")
-    else:
-        df = pd.DataFrame(dados)
-        st.subheader("📝 Etapas extraídas do POP")
-        edited_df = st.data_editor(df, num_rows="dynamic", use_container_width=True)
-
-        if st.button("📥 Gerar Fluxograma (Draw.io)"):
-            try:
-                xml = gerar_drawio_com_lanes(edited_df)
-                filename = f"fluxograma_{datetime.now().strftime('%Y%m%d%H%M%S')}.xml"
-                st.download_button("⬇ Baixar XML Draw.io", xml, file_name=filename, mime="application/xml")
-                drawio_link = gerar_link_imagem(xml)
-                st.markdown(f"[🔍 Visualizar diretamente no Draw.io]({drawio_link})")
-                st.success("✅ Arquivo gerado e pronto para visualizar!")
-            except KeyError as e:
-                st.error(f"❌ Erro: {str(e)}")
+    st.info("📄 Aguarde o upload de um arquivo .docx com o conteúdo do POP.")
